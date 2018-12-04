@@ -3,6 +3,7 @@
          dice/0,
          stop/0,
          rolls_left/0]).
+
 -behavior(gen_statem).
 -export([start_link/0,
          init/1,
@@ -10,17 +11,16 @@
         ]).
 
 %% States
--export([second_roll/3,
-         third_roll/3,
-         end_state/3
+-export([first_roll/3,
+         second_roll/3,
+         third_roll/3
         ]).
-
 
 %% SPEC -------------------------------------------
 -spec start_link() -> {'ok', TurnPid::pid()}.
 
--spec roll(Keep::[1..6]) -> 'ok' | 'invalid_keepers'
-                                 | 'finished'.
+-spec roll(Keep::[1..6]) -> {'ok', yatzy:roll()} | 'invalid_keepers'
+                                                 | 'finished'.
 %% Once the player has selected which dice to keep roll the remaining
 %% dice unless they have already been rolled twice.
 
@@ -40,7 +40,7 @@ start_link() ->
 init(null) ->
     NumDice = 5,
     FirstRoll = randomize_dice(NumDice),
-    {ok, second_roll, FirstRoll}.
+    {ok, first_roll, FirstRoll}.
 
 callback_mode() ->
     state_functions.
@@ -60,20 +60,20 @@ rolls_left() ->
 %% FIRST ROLL =====================================
 %% dice
 first_roll({call, From}, dice, Roll) ->
-    {keep_state_and_data, [{reply, From, Roll}]};
+    {keep_state_and_data, {reply, From, Roll}};
 %% {roll, Keep}
 first_roll({call, From}, {roll, Keep}, Roll) ->
     case is_valid_keep(Keep, Roll) of
         true ->
             NewRoll = randomize_dice(5 - length(Keep)) ++ Keep,
-            {next_state, second_roll, NewRoll, [{reply, From, NewRoll}]};
+            {next_state, second_roll, NewRoll, {reply, From, {ok, NewRoll}}};
         false ->
-            {keep_state_and_data, [{reply, From, invalid_keepers}]}
+            {keep_state_and_data, {reply, From, invalid_keepers}}
     end;
 %% rolls_left
 first_roll({call, From}, rolls_left, _Roll) ->
     RollsLeft = 2,
-    {keep_state_and_data, [{reply, From, RollsLeft}]};
+    {keep_state_and_data, {reply, From, RollsLeft}};
 %% stop
 first_roll({call, From}, stop, Roll) ->
     {stop_and_reply, normal, {reply, From, Roll}}.
@@ -81,20 +81,20 @@ first_roll({call, From}, stop, Roll) ->
 %% SECOND ROLL =====================================
 %% dice
 second_roll({call, From}, dice, Roll) ->
-    {keep_state_and_data, [{reply, From, Roll}]};
+    {keep_state_and_data, {reply, From, Roll}};
 %% {roll, Keep}
 second_roll({call, From}, {roll, Keep}, Roll) ->
     case is_valid_keep(Keep, Roll) of
         true ->
             NewRoll = randomize_dice(5 - length(Keep)) ++ Keep,
-            {next_state, third_roll, NewRoll, {reply, From, NewRoll}};
+            {next_state, third_roll, NewRoll, {reply, From, {ok, NewRoll}}};
         false ->
-            {keep_state_and_data, [{reply, From, invalid_keepers}]}
+            {keep_state_and_data, {reply, From, invalid_keepers}}
     end;
 %% rolls_left
 second_roll({call, From}, rolls_left, _Roll) ->
     RollsLeft = 1,
-    {keep_state_and_data, [{reply, From, RollsLeft}]};
+    {keep_state_and_data, {reply, From, RollsLeft}};
 %% stop
 second_roll({call, From}, stop, Roll) ->
     {stop_and_reply, normal, {reply, From, Roll}}.
@@ -102,14 +102,14 @@ second_roll({call, From}, stop, Roll) ->
 %% THIRD ROLL =======================================
 %% dice
 third_roll({call, From}, dice, Roll) ->
-    {keep_state_and_data, [{reply, From, Roll}]};
+    {keep_state_and_data, {reply, From, Roll}};
 %% {roll, Keep}
 third_roll({call, From}, {roll, _Keep}, _Roll) ->
-    {keep_state_and_data, [{reply, From, finished}]};
+    {keep_state_and_data, {reply, From, finished}};
 %% rolls_left
 third_roll({call, From}, rolls_left, _Roll) ->
     RollsLeft = 0,
-    {keep_state_and_data, [{reply, From, RollsLeft}]};
+    {keep_state_and_data, {reply, From, RollsLeft}};
 %% stop
 third_roll({call, From}, stop, Roll) ->
     {stop_and_reply, normal, {reply, From, Roll}}.
